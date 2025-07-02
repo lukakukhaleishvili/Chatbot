@@ -1,0 +1,235 @@
+﻿@{
+    ViewData["Title"] = "Chat";
+}
+
+<!-- Google Fonts -->
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet" />
+
+<!-- Styles -->
+<style>
+    body {
+        font-family: 'Inter', sans-serif;
+        background: #f6f7f8;
+        padding: 2rem;
+        color: #1c1c1c;
+    }
+
+    .chat-container {
+        max-width: 800px;
+        margin: auto;
+        background: white;
+        border-radius: 10px;
+        padding: 1.5rem 2rem;
+        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.05);
+    }
+
+    .chat-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+
+        .chat-header h2 {
+            margin: 0;
+            font-weight: 600;
+        }
+
+    .user-list {
+        margin-top: 1rem;
+        padding: 0;
+        list-style: none;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+    }
+
+        .user-list li {
+            display: flex;
+            align-items: center;
+            background: #e4e6eb;
+            padding: 5px 10px;
+            border-radius: 20px;
+            font-size: 0.9rem;
+        }
+
+    .user-status {
+        display: inline-block;
+        width: 10px;
+        height: 10px;
+        border-radius: 50%;
+        margin-right: 8px;
+    }
+
+    .online {
+        background-color: #28a745;
+    }
+
+    .offline {
+        background-color: gray;
+    }
+
+    #messagesList {
+        height: 300px;
+        overflow-y: auto;
+        border: 1px solid #ddd;
+        border-radius: 8px;
+        padding: 1rem;
+        margin: 1rem 0;
+        background: #fafafa;
+    }
+
+    .message {
+        margin-bottom: 10px;
+    }
+
+        .message strong {
+            color: #3f51b5;
+        }
+
+    .input-group {
+        display: flex;
+        gap: 10px;
+    }
+
+    #messageInput {
+        flex-grow: 1;
+        padding: 10px;
+        border: 1px solid #ccc;
+        border-radius: 8px;
+        font-size: 1rem;
+    }
+
+    #sendButton {
+        padding: 10px 20px;
+        background: #3f51b5;
+        border: none;
+        border-radius: 8px;
+        color: white;
+        cursor: pointer;
+        font-weight: 600;
+    }
+
+    #logoutButton {
+        background: transparent;
+        border: none;
+        color: #3f51b5;
+        cursor: pointer;
+        font-weight: 600;
+        text-decoration: underline;
+    }
+
+    .username-box {
+        margin-top: 1rem;
+        margin-bottom: 1rem;
+        display: flex;
+        gap: 10px;
+        align-items: center;
+    }
+
+    #usernameInput {
+        padding: 5px 10px;
+        font-size: 1rem;
+        border-radius: 6px;
+        border: 1px solid #ccc;
+    }
+
+    #setUsernameBtn {
+        padding: 6px 12px;
+        font-size: 1rem;
+        background-color: #3f51b5;
+        color: white;
+        border: none;
+        border-radius: 6px;
+        cursor: pointer;
+    }
+</style>
+
+<!-- UI -->
+<div class="chat-container">
+    <div class="chat-header">
+        <h2>Chat Room</h2>
+        <form asp-controller="Account" asp-action="Logout" method="post">
+            <button id="logoutButton" type="submit">Logout</button>
+        </form>
+    </div>
+
+    <div class="username-box">
+        <input type="text" id="usernameInput" placeholder="Enter your name..." />
+        <button id="setUsernameBtn">Set Username</button>
+    </div>
+
+    <ul id="userList" class="user-list"></ul>
+
+    <div id="messagesList"></div>
+
+    <div class="input-group">
+        <input type="text" id="messageInput" placeholder="Type a message..." />
+        <button id="sendButton">Send</button>
+    </div>
+</div>
+
+<!-- Scripts -->
+@section Scripts {
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/microsoft-signalr/7.0.5/signalr.min.js"></script>
+    <script>
+        let currentUserName = localStorage.getItem("chatUsername") || "";
+
+        const connection = new signalR.HubConnectionBuilder()
+            .withUrl("/chathub")
+            .build();
+
+        // Display received message
+        connection.on("ReceiveMessage", (user, message, time) => {
+            const msg = document.createElement("div");
+            msg.classList.add("message");
+            msg.innerHTML = `<strong>${user || "Unknown"} [${time}]:</strong> ${message}`;
+            document.getElementById("messagesList").appendChild(msg);
+            document.getElementById("messagesList").scrollTop = messagesList.scrollHeight;
+        });
+
+        // Update online users
+        connection.on("UserConnected", (user, users) => updateUsers(users));
+        connection.on("UserDisconnected", (user, users) => updateUsers(users));
+
+        // Connect to SignalR
+        connection.start().catch(err => console.error(err.toString()));
+
+        // Send button click
+        document.getElementById("sendButton").addEventListener("click", () => {
+            const message = document.getElementById("messageInput").value;
+            if (message.trim() !== "") {
+                connection.invoke("SendMessage", currentUserName || "Anonymous", message)
+                    .catch(err => console.error(err.toString()));
+                document.getElementById("messageInput").value = "";
+            }
+        });
+
+        // Render users
+        function updateUsers(users) {
+            const ul = document.getElementById("userList");
+            ul.innerHTML = "";
+            users.forEach(u => {
+                const li = document.createElement("li");
+                li.innerHTML = `<span class="user-status online"></span>${u || "Anonymous"}`;
+                ul.appendChild(li);
+            });
+        }
+
+        // Set username
+        document.getElementById("setUsernameBtn").addEventListener("click", () => {
+            const input = document.getElementById("usernameInput").value.trim();
+            if (input) {
+                currentUserName = input;
+                localStorage.setItem("chatUsername", input);
+                alert("Username set as: " + currentUserName);
+            }
+        });
+
+        // Pre-fill username if saved
+        window.addEventListener("DOMContentLoaded", () => {
+            if (currentUserName) {
+                document.getElementById("usernameInput").value = currentUserName;
+            }
+        });
+    </script>
+}
